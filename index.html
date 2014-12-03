@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html ng-app="chartApp">
+<head lang="en">
+  <meta charset="UTF-8">
+  <title>RI Cost Simulator</title>
+  <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.1/css/bootstrap.min.css">
+  <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.1/css/bootstrap-theme.min.css">
+  <script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.1/js/bootstrap.min.js"></script>
+  <script src="//ajax.googleapis.com/ajax/libs/angularjs/1.2.0/angular.min.js"></script>
+  <script type="text/javascript" src="https://www.google.com/jsapi"></script>
+  <script type="text/javascript">
+
+    google.load("visualization", "1", {packages:["corechart"]});
+
+    var price = {};
+    price['ap-northeast-1'] = {
+      'r3.large': {
+        'linux': [[0, 0.21],[0, 0],[0, 0],[692, 0.069],[1286, 0.06],[1173, 0],[2331, 0],[777, 0.048],[1482, 0.038],[0, 0.157]]
+      },
+      'm3.large': {
+        'linux': [[0, 0.203],[240, 0.184],[378, 0.146],[401, 0.086],[608, 0.07],[1000, 0],[1940, 0],[487, 0.061],[750, 0.050],[0, 0.134]]
+      },
+      'c3.large': {
+        'linux': [[0, 0.128],[181, 0.128],[265, 0.126],[301, 0.061],[462, 0.055],[753, 0],[1528, 0],[357, 0.047],[549, 0.041],[0, 0.097]]
+      }
+    };
+
+    function round2(num){return Math.round(num * 100) / 100;}
+    function onDemand(initial, running, month, uprate) { return running * 24 * 365 / 12 * month * uprate; }
+    function oneYear(initial, running, month, uprate) { return initial * (Math.ceil(month/12)) + onDemand(initial, running, month, uprate); }
+    function oneYearFix(initial, running, month, uprate) { return oneYear(initial, running, month, 1); }
+    function threeYear(initial, running, month, uprate) { return initial * (Math.ceil(month/36)) + onDemand(initial, running, month, uprate);  }
+    function threeYearFix(initial, running, month, uprate) { return threeYear(initial, running, month, 1); }
+    var riTypes = ['On Demand', 'Light Utilization 1y', 'Light Utilization 3y', 'Medium Utilization 1y', 'Medium Utilization 3y', 'All Upfront 1y', 'All Upfront 3y', 'Partial Upfront 1y', 'Partial Upfront 3y', 'No Upfront 1y'];
+    var priceFunctions = [onDemand, oneYear, threeYear, oneYear, threeYear, oneYearFix, threeYearFix, oneYearFix, threeYearFix, oneYearFix];
+
+    angular.module('chartApp', [])
+            .controller('chartController', function($scope) {
+              $scope.regions = [{id: 'ap-northeast-1', name:'Tokyo'}];
+              $scope.region = $scope.regions[0];
+              $scope.instanceTypes = ['r3.large', 'm3.large', 'c3.large'];
+              $scope.instanceType = $scope.instanceTypes[0];
+              $scope.platforms = ['linux'];
+              $scope.platform = $scope.platforms[0];
+              $scope.uprate = 100;
+              $scope.drawChart = function() {
+                var pt = price[$scope.region.id][$scope.instanceType][$scope.platform];
+                var header = ['Month'];
+                Array.prototype.push.apply(header, riTypes);
+                var array = [header];
+                for(var i = 0; i<= 36; i++) {
+                  var row = [i];
+                  for(var j = 0; j<riTypes.length; j++) {
+                    row.push(round2(priceFunctions[j](pt[j][0], pt[j][1], i, $scope.uprate / 100)));
+                  }
+                  array.push(row);
+                }
+                var data = google.visualization.arrayToDataTable(array);
+                var options = {
+                  chartArea: {width: '60%'},
+                  hAxis: {
+                    title: "months",
+                    gridlines: {
+                      count: 6
+                    }
+                  },
+                  vAxis: {
+                    title: "cost($)"
+                  }
+                };
+                var chart = new google.visualization.LineChart(document.getElementById('chart_div'));
+                chart.draw(data, options);
+              }
+              google.setOnLoadCallback(function(){$scope.drawChart()});
+            });
+
+  </script>
+
+</head>
+<body ng-controller="chartController">
+<div class="container">
+  <h1>RI Cost Simulator</h1>
+  <form class="form-horizontal" role="form">
+    <div class="form-group">
+      <label class="col-sm-2 control-label">Region</label>
+      <div class="col-sm-4">
+        <select class="form-control" ng-model="region" ng-options="r.name for r in regions" ng-change="drawChart()">
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="col-sm-2 control-label">Instance Type</label>
+      <div class="col-sm-4">
+        <select class="form-control" ng-model="instanceType" ng-options="i for i in instanceTypes" ng-change="drawChart()">
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="col-sm-2 control-label">Platform</label>
+      <div class="col-sm-4">
+        <select class="form-control" ng-model="platform" ng-options="p for p in platforms" ng-change="drawChart()">
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="col-sm-2 control-label">Utilization Rate(%)</label>
+      <div class="col-sm-4">
+        <input class="" type="range" min="0" max="100" ng-model="uprate" ng-change="drawChart()"/>
+        {{uprate}}%
+      </div>
+    </div>
+  </form>
+  <div id="chart_div" style="width: 900px; height: 500px;"></div>
+  <div>注意：料金の正しさは保証しません。正確な料金は <a href="http://aws.amazon.com/ec2/pricing/">AWS のサイト</a>を参照してください。</div>
+</div>
+</body>
+</html>
